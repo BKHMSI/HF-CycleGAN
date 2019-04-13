@@ -1,0 +1,18 @@
+run-title: "HF-CycleGAN-1"
+
+paths:
+  base: /home/bkhmsi/Documents/Datasets/CycleGAN
+
+train:
+  epochs: 1000
+  batch-size: 4
+  save-interval: 10
+  lambda-cycle-loss: 10
+
+
+data:
+  dataset: horse2zebra
+  imsize: 256
+  imchannels: 3
+  extension: jpg
+
