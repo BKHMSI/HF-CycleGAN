@@ -9,8 +9,8 @@ from keras import backend as K
 class Models:
     def __init__(self, config):
         # Input shape
-        self.imsize = config["imsize"]
-        self.imchannels = config["imchannels"]
+        self.imsize = config["data"]["imsize"]
+        self.imchannels = config["data"]["imchannels"]
         self.imshape = (self.imsize, self.imsize, self.imchannels)
 
     def build_generator(self, gf=64, network="disentangler", stream="C"):

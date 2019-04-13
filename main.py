@@ -16,8 +16,8 @@ from dataloader import Dataloader
 class HFCycleGAN:
     def __init__(self, config):
         # Input shape
-        self.imsize = config["imsize"]
-        self.imchannels = config["imchannels"]
+        self.imsize = config["data"]["imsize"]
+        self.imchannels = config["data"]["imchannels"]
         self.imshape = (self.imsize, self.imsize, self.imchannels)
         
         # Configure data loader
@@ -68,11 +68,11 @@ class HFCycleGAN:
         image_V = Input(shape=self.imshape) 
         
         # Translate image
-        self.d_c_stream.trainble = True
+        self.d_c_stream.trainable = True
         fake_C = self.d_c_stream(image_V)
 
         # Obtain feature-maps (residuals)
-        self.d_r_stream.trainble = True
+        self.d_r_stream.trainable = True
         residuals_V = self.d_r_stream(image_V)
 
         # Freeze discriminator
@@ -121,7 +121,7 @@ class HFCycleGAN:
         return Model(image_C, [valid_V, reconstr_C, residuals_C])
 
 
-    def train(self, epochs, batch_size, sample_interval):
+    def train(self, epochs, batch_size, save_interval):
         pass 
 
     def sample(self, index):
@@ -133,8 +133,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with open(args.config, 'r') as file:
-        config = yaml.load(file)
+        config = yaml.load(file, Loader=yaml.Loader)
 
     gan = HFCycleGAN(config)
-    gan.train(epochs=config["train"]["epochs"], batch_size=config["train"]["batch-size"], sample_interval=config["train"]["sample-interval"])
+    gan.train(epochs=config["train"]["epochs"], batch_size=config["train"]["batch-size"], save_interval=config["train"]["save-interval"])
 
