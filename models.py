@@ -1,10 +1,11 @@
-from keras_contrib.layers.normalization import InstanceNormalization
+from keras_contrib.layers.normalization.instancenormalization import InstanceNormalization
 from keras.layers import Input, Dense, Reshape, Flatten, Dropout, Concatenate, Add
 from keras.layers import BatchNormalization, Activation, ZeroPadding2D
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import UpSampling2D, Conv2D
 from keras.models import Model
 from keras import backend as K
+
 
 class Models:
     def __init__(self, config):
@@ -20,8 +21,8 @@ class Models:
             d = Conv2D(filters, kernel_size=f_size, strides=2, padding='same')(layer_input)
             d = InstanceNormalization()(d)
             d = LeakyReLU(alpha=0.2)(d)
-            if skip_input:
-                d = Concatenate()([d, skip_input])
+            if skip_input is not None:
+                d = Concatenate(axis=2)([d, skip_input])
             return d
 
         def residual_block(layer_input, filters, f_size=3, skip_input=None):
@@ -32,8 +33,8 @@ class Models:
             d = Conv2D(filters, kernel_size=f_size, padding='same')(d)
             d = BatchNormalization()(d)
             d = Add()([d, shortcut])
-            if skip_input:
-                d = Concatenate()([d, skip_input])
+            if skip_input is not None:
+                d = Concatenate(axis=2)([d, skip_input])
             return d
 
         def deconv2d(layer_input, filters, f_size=3):
@@ -49,9 +50,9 @@ class Models:
         if network == "disentangler":
             inputs = g0
         elif network == "entangler":
-            s2 = Input(shape=(gf*2, 4, 4))
-            s4 = Input(shape=(gf*4, 4, 4))
-            s6 = Input(shape=(gf*4, 4, 4))
+            s2 = Input(shape=(64, 64, gf*2))
+            s4 = Input(shape=(64, 64, gf*2))
+            s6 = Input(shape=(64, 64, gf*2))
             inputs = [g0, s2, s4, s6]
 
         # Downsampling
@@ -59,21 +60,21 @@ class Models:
         g2 = conv2d(g1, gf*2, skip_input=s2 if network == "entangler" else None)
 
         # Redidual-blocks
-        g3 = residual_block(g2, gf*4)
-        g4 = residual_block(g3, gf*4, skip_input=s4 if network == "entangler" else None)
-        g5 = residual_block(g4, gf*4)
-        g6 = residual_block(g5, gf*4, skip_input=s6 if network == "entangler" else None)
+        g3 = residual_block(g2, gf*2)
+        g4 = residual_block(g3, gf*2, skip_input=s4 if network == "entangler" else None)
+        g5 = residual_block(g4, gf*2)
+        g6 = residual_block(g5, gf*2, skip_input=s6 if network == "entangler" else None)
 
         if stream == "C":
             # Upsampling
             g7 = deconv2d(g6, gf*2)
             g8 = deconv2d(g7, gf)
 
-            output = Conv2D(self.imchannels, kernel_size=3, activiation="tanh")(g8)
+            outputs = Conv2D(self.imchannels, kernel_size=3, activation="tanh", padding="same")(g8)
         elif stream == "R":
-            output = [g2, g4, g6]
+            outputs = [g2, g4, g6]
 
-        return Model(inputs, output)
+        return Model(inputs, outputs)
 
     def build_discriminator(self, df=64):
 

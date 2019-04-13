@@ -58,8 +58,8 @@ class HFCycleGAN:
 
         # Build and compile entangler
         self.entangler = self.build_entangler()
-        self.entangler.compile(loss=["mse", "mae", "mae"],
-                               loss_weights=[self.lambda_adv, self.lambda_cycle, self.lambda_res], optimizer=optimizer)
+        self.entangler.compile(loss=["mse", "mae", "mae", "mae", "mae"],
+                               loss_weights=[self.lambda_adv, self.lambda_cycle, self.lambda_res, self.lambda_res, self.lambda_res], optimizer=optimizer)
 
 
     def build_disentangler(self):
@@ -118,7 +118,7 @@ class HFCycleGAN:
         reconstr_C = self.d_c_stream(fake_V)
         residuals_C = self.d_r_stream(fake_V)
 
-        return Model(image_C, [valid_V, reconstr_C, residuals_C])
+        return Model([image_C, image_V], [valid_V, reconstr_C, residuals_C[0], residuals_C[1], residuals_C[2]])
 
 
     def train(self, epochs, batch_size, save_interval):
