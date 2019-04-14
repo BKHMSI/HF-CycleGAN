@@ -1,5 +1,5 @@
 from keras_contrib.layers.normalization.instancenormalization import InstanceNormalization
-from keras.layers import Input, Dense, Reshape, Flatten, Dropout, Concatenate, Add
+from keras.layers import Input, Dense, Reshape, Flatten, Dropout, Concatenate, Add, Average
 from keras.layers import BatchNormalization, Activation, ZeroPadding2D
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import UpSampling2D, Conv2D
@@ -13,6 +13,9 @@ class Models:
         self.imsize = config["data"]["imsize"]
         self.imchannels = config["data"]["imchannels"]
         self.imshape = (self.imsize, self.imsize, self.imchannels)
+        # Residuals shape
+        self.ressize = config["train"]["res-size"]
+        self.resshape = (self.ressize, self.ressize, config["train"]["res-filters"])
 
     def build_generator(self, gf=64, network="disentangler", stream="C"):
 
@@ -22,7 +25,7 @@ class Models:
             d = InstanceNormalization()(d)
             d = LeakyReLU(alpha=0.2)(d)
             if skip_input is not None:
-                d = Concatenate(axis=2)([d, skip_input])
+                d = Average()([d, skip_input])
             return d
 
         def residual_block(layer_input, filters, f_size=3, skip_input=None):
@@ -34,7 +37,7 @@ class Models:
             d = BatchNormalization()(d)
             d = Add()([d, shortcut])
             if skip_input is not None:
-                d = Concatenate(axis=2)([d, skip_input])
+                d = Average()([d, skip_input])
             return d
 
         def deconv2d(layer_input, filters, f_size=3):
@@ -50,9 +53,9 @@ class Models:
         if network == "disentangler":
             inputs = g0
         elif network == "entangler":
-            s2 = Input(shape=(64, 64, gf*2))
-            s4 = Input(shape=(64, 64, gf*2))
-            s6 = Input(shape=(64, 64, gf*2))
+            s2 = Input(shape=self.resshape)
+            s4 = Input(shape=self.resshape)
+            s6 = Input(shape=self.resshape)
             inputs = [g0, s2, s4, s6]
 
         # Downsampling

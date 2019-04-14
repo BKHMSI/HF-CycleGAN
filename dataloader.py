@@ -6,8 +6,6 @@ import argparse
 import numpy as np
 
 from glob import glob
-from skimage import transform
-
 
 class Dataloader:
     def __init__(self, config):
@@ -51,8 +49,11 @@ class Dataloader:
                 img_A = self.imread(img_A)
                 img_B = self.imread(img_B)
 
-                img_A = scipy.misc.imresize(img_A, self.imsize)
-                img_B = scipy.misc.imresize(img_B, self.imsize)
+                if img_A.shape != self.imshape:
+                    img_A = scipy.misc.imresize(img_A, self.imshape)
+
+                if img_B.shape != self.imshape:
+                    img_B = scipy.misc.imresize(img_B, self.imshape)
 
                 if self.imchannels == 1:
                     img_A = np.reshape(img_A, (self.imsize, self.imsize, self.imchannels))
@@ -81,9 +82,10 @@ class Dataloader:
         imgs = []
         for img_path in batch_images:
             img = self.imread(img_path)
-            img = scipy.misc.imresize(img, self.imsize)
+            if img.shape != self.imshape:
+                img = scipy.misc.imresize(img, self.imshape)
             if self.imchannels == 1:
-                img = np.reshape(img, (self.imsize, self.imsize, self.imchannels))
+                img = np.reshape(img, self.imshape)
             imgs.append(img)
 
         imgs = self.preprocess(imgs)
@@ -102,8 +104,11 @@ class Dataloader:
             img_A = self.imread(img_path_A)
             img_B = self.imread(img_path_B)
             
-            img_A = transform.resize(img_A, self.imshape)
-            img_B = transform.resize(img_B, self.imshape)
+            if img_A.shape != self.imshape:
+                img_A = scipy.misc.imresize(img_A, self.imshape)
+
+            if img_B.shape != self.imshape:
+                img_B = scipy.misc.imresize(img_B, self.imshape)
 
             if self.imchannels == 1:
                 img_A = np.reshape(img_A, (self.imsize, self.imsize, self.imchannels))
@@ -125,7 +130,7 @@ class Dataloader:
         return img
 
     def imread(self, path):
-        return scipy.misc.imread(path, mode='L').astype(np.float)
+        return scipy.misc.imread(path, mode=("L" if self.imchannels == 1 else "RGB")).astype(np.float)
 
     def __str__(self):
         n_batches = int(min(len(self.train_A), len(self.train_B)) / self.batch_size)

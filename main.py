@@ -19,6 +19,11 @@ class HFCycleGAN:
         self.imsize = config["data"]["imsize"]
         self.imchannels = config["data"]["imchannels"]
         self.imshape = (self.imsize, self.imsize, self.imchannels)
+
+        self.ressize = config["train"]["res-size"]
+        self.resshape = (self.ressize, self.ressize, config["train"]["res-filters"])
+
+        self.savepath = config["paths"]["save"]
         
         # Configure data loader
         self.dataloader = Dataloader(config)
@@ -39,11 +44,11 @@ class HFCycleGAN:
         optimizer = Adam(0.0002, 0.5)
 
         # Build and compile the discriminators
-        self.d_C = models.build_discriminator()
-        self.d_V = models.build_discriminator()
+        self.d_A = models.build_discriminator()
+        self.d_B = models.build_discriminator()
 
-        self.d_C.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
-        self.d_V.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
+        self.d_A.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
+        self.d_B.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
 
         # Build streams
         self.d_c_stream = models.build_generator(network="disentangler", stream="C")
@@ -65,67 +70,141 @@ class HFCycleGAN:
     def build_disentangler(self):
 
         # Input image 
-        image_V = Input(shape=self.imshape) 
+        image_A = Input(shape=self.imshape) 
         
         # Translate image
         self.d_c_stream.trainable = True
-        fake_C = self.d_c_stream(image_V)
+        fake_B = self.d_c_stream(image_A)
 
         # Obtain feature-maps (residuals)
         self.d_r_stream.trainable = True
-        residuals_V = self.d_r_stream(image_V)
+        residuals_A = self.d_r_stream(image_A)
 
         # Freeze discriminator
-        self.d_C.trainable = False
+        self.d_B.trainable = False
 
         # Trick discriminator into thinking it is real
-        valid_C = self.d_C(fake_C)
+        valid_B = self.d_B(fake_B)
  
         # Freeze entangler
         self.e_c_stream.trainable = False 
 
         # Reconstruct image using entangler
-        reconstr_V = self.e_c_stream([fake_C, residuals_V[0], residuals_V[1], residuals_V[2]])
+        reconstr_A = self.e_c_stream([fake_B, residuals_A[0], residuals_A[1], residuals_A[2]])
 
-        return Model(image_V, [valid_C, reconstr_V])
+        return Model(image_A, [valid_B, reconstr_A])
 
     def build_entangler(self):
 
         # Input image 
-        image_C = Input(shape=self.imshape) 
-    
-        # Random input image from other domain
-        image_V = Input(shape=self.imshape) 
-        
-        # Freeze disentangler's R stream
-        self.d_r_stream.trainable = False 
-        residuals_V = self.d_r_stream(image_V)
+        image_B = Input(shape=self.imshape) 
+
+        residuals_A_0 = Input(shape=self.resshape)
+        residuals_A_1 = Input(shape=self.resshape)
+        residuals_A_2 = Input(shape=self.resshape)
 
         # Translate image given residuals
         self.e_c_stream.trainable = True
-        fake_V = self.e_c_stream([image_C, residuals_V[0], residuals_V[1], residuals_V[2]])
+        fake_A = self.e_c_stream([image_B, residuals_A_0, residuals_A_1, residuals_A_2])
 
         # Freeze discriminator
-        self.d_V.trainable = False 
+        self.d_A.trainable = False 
 
         # Trick discriminator into thinking it is real
-        valid_V = self.d_V(fake_V)
+        valid_A = self.d_A(fake_A)
 
         # Freeze disentangler
         self.d_c_stream.trainable = False 
-        
-        # Reconstruct image and residuals using disentangler
-        reconstr_C = self.d_c_stream(fake_V)
-        residuals_C = self.d_r_stream(fake_V)
+        self.d_r_stream.trainable = False 
 
-        return Model([image_C, image_V], [valid_V, reconstr_C, residuals_C[0], residuals_C[1], residuals_C[2]])
+        # Reconstruct image and residuals using disentangler
+        reconstr_B = self.d_c_stream(fake_A)
+        residuals_A = self.d_r_stream(fake_A)
+
+        return Model([image_B, residuals_A_0, residuals_A_1, residuals_A_2], [valid_A, reconstr_B, residuals_A[0], residuals_A[1], residuals_A[2]])
 
 
     def train(self, epochs, batch_size, save_interval):
-        pass 
+
+        start_time = datetime.datetime.now()
+
+        # Adversarial loss ground truths
+        valid = np.ones((batch_size,) + self.disc_patch)
+        fake = np.zeros((batch_size,) + self.disc_patch)
+
+        for epoch in range(epochs):
+            for batch_idx, (imgs_A, imgs_B) in enumerate(self.dataloader.load_batch(batch_size)):
+
+                # ----------------------
+                #  Train Discriminators
+                # ----------------------
+
+                # Translate images to opposite domain
+                fake_B = self.d_c_stream.predict_on_batch(imgs_A)
+                res_A  = self.d_r_stream.predict_on_batch(imgs_A)
+
+                fake_A = self.e_c_stream.predict_on_batch([imgs_B, res_A[0], res_A[1], res_A[2]])
+
+                # Train the discriminators (original images = real / translated = Fake)
+                dA_loss_real = self.d_A.train_on_batch(imgs_A, valid)
+                dA_loss_fake = self.d_A.train_on_batch(fake_A, fake)
+                dA_loss = 0.5 * np.add(dA_loss_real, dA_loss_fake)
+
+                dB_loss_real = self.d_B.train_on_batch(imgs_B, valid)
+                dB_loss_fake = self.d_B.train_on_batch(fake_B, fake)
+                dB_loss = 0.5 * np.add(dB_loss_real, dB_loss_fake)
+
+                # Total disciminator loss
+                d_loss = 0.5 * np.add(dA_loss, dB_loss)
+
+                # --------------------------------
+                #  Train Disentangler & Entangler
+                # --------------------------------
+
+                dis_loss = self.disentangler.train_on_batch(imgs_A, [valid, imgs_A])
+                ent_loss = self.entangler.train_on_batch([imgs_B, res_A[0], res_A[1], res_A[2]], [valid, imgs_B, res_A[0], res_A[1], res_A[2]])
+
+                res_reconstr_loss = (ent_loss[2] + ent_loss[3] + ent_loss[4]) / 3.
+
+                elapsed_time = datetime.datetime.now() - start_time
+
+                # Plot the progress
+                print(f"[Epoch {epoch}/{epochs}] [Batch {batch_idx}/{self.dataloader.n_batches} [D Loss: {d_loss[0]}, acc: {d_loss[1]*100:.4f}] [Adv Loss: {dis_loss[0]}, {ent_loss[0]}] [Cycle Loss: {dis_loss[1]}, {ent_loss[1]}] [Res Loss: {res_reconstr_loss}] [Time: {elapsed_time}]", end="\r")
+
+            if (epoch+1) % save_interval == 0:
+                self.sample(epoch+1)
+                # self.disentangler.save(os.path.join(self.save_path, ""))
+                # self.entangler.save(os.path.join(self.save_path, ""))
+
 
     def sample(self, index):
-        pass 
+        r, c = 2, 2
+        
+        imgs_A, imgs_B = self.dataloader.load_data(batch_size=1, is_testing=True) 
+
+        # Translate images to the other domain
+        fake_B = self.d_c_stream.predict_on_batch(imgs_A)
+        res_A  = self.d_r_stream.predict_on_batch(imgs_A)
+
+        fake_A = self.e_c_stream.predict_on_batch([imgs_B, res_A[0], res_A[1], res_A[2]])
+
+        gen_imgs = np.concatenate([imgs_A, fake_B, imgs_B, fake_A]).squeeze()
+
+        # Rescale images 0 - 1
+        gen_imgs = 0.5 * gen_imgs + 0.5
+
+        titles = ['Original', 'Translated']
+
+        plt.switch_backend('agg')
+        fig, axs = plt.subplots(r, c)
+        for i in range(r):
+            for j in range(c):
+                axs[i,j].imshow(gen_imgs[i*c+j])
+                axs[i,j].set_title(titles[j])
+                axs[i,j].axis('off')
+                
+        fig.savefig(os.path.join(self.savepath, f"sample_{index}.png"))
+        plt.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='HF-CycleGAN Paramaters')

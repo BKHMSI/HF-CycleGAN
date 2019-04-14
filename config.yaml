@@ -2,12 +2,16 @@ run-title: "HF-CycleGAN-1"
 
 paths:
   base: /home/bkhmsi/Documents/Datasets/CycleGAN
+  save: ./output
 
 train:
   epochs: 1000
   batch-size: 4
   save-interval: 10
   lambda-cycle-loss: 10
+
+  res-size: 64
+  res-filters: 128
 
 
 data:
