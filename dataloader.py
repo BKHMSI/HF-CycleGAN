@@ -95,6 +95,9 @@ class Dataloader:
         paths_A = self.train_A if not is_testing else self.test_A
         paths_B = self.train_B if not is_testing else self.test_B
 
+        paths_A = np.array(paths_A)
+        paths_B = np.array(paths_B)
+
         batch_idxs = np.random.choice(len(paths_A), size=batch_size, replace=False)
         batch_images = zip(paths_A[batch_idxs], paths_B[batch_idxs])
 

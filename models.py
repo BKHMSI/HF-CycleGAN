@@ -25,7 +25,7 @@ class Models:
             d = InstanceNormalization()(d)
             d = LeakyReLU(alpha=0.2)(d)
             if skip_input is not None:
-                d = Average()([d, skip_input])
+                d = Concatenate()([d, skip_input])
             return d
 
         def residual_block(layer_input, filters, f_size=3, skip_input=None):
@@ -37,7 +37,7 @@ class Models:
             d = BatchNormalization()(d)
             d = Add()([d, shortcut])
             if skip_input is not None:
-                d = Average()([d, skip_input])
+                d = Concatenate()([d, skip_input])
             return d
 
         def deconv2d(layer_input, filters, f_size=3):
@@ -63,10 +63,16 @@ class Models:
         g2 = conv2d(g1, gf*2, skip_input=s2 if network == "entangler" else None)
 
         # Redidual-blocks
-        g3 = residual_block(g2, gf*2)
-        g4 = residual_block(g3, gf*2, skip_input=s4 if network == "entangler" else None)
-        g5 = residual_block(g4, gf*2)
-        g6 = residual_block(g5, gf*2, skip_input=s6 if network == "entangler" else None)
+        if network == "entangler":
+            g3 = residual_block(g2, gf*4)
+            g4 = residual_block(g3, gf*4, skip_input=s4)
+            g5 = residual_block(g4, gf*6)
+            g6 = residual_block(g5, gf*6, skip_input=s6)
+        else:
+            g3 = residual_block(g2, gf*2)
+            g4 = residual_block(g3, gf*2)
+            g5 = residual_block(g4, gf*2)
+            g6 = residual_block(g5, gf*2)
 
         if stream == "C":
             # Upsampling

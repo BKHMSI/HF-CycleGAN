@@ -7,7 +7,7 @@ paths:
 train:
   epochs: 1000
   batch-size: 4
-  save-interval: 10
+  save-interval: 2
   lambda-cycle-loss: 10
 
   res-size: 64
