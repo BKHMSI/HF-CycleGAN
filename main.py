@@ -4,11 +4,14 @@ import yaml
 import datetime
 import argparse
 import numpy as np
+import tensorflow as tf
 import matplotlib.pyplot as plt
 
+from shutil import copyfile
 from keras.layers import Input
 from keras.models import Model
 from keras.optimizers import Adam
+from keras import backend as K
 
 from models import Models
 from dataloader import Dataloader
@@ -23,7 +26,7 @@ class HFCycleGAN:
         self.ressize = config["train"]["res-size"]
         self.resshape = (self.ressize, self.ressize, config["train"]["res-filters"])
 
-        self.savepath = config["paths"]["save"]
+        self.save_path = os.path.join(config["paths"]["save"], config["run-title"])
         
         # Configure data loader
         self.dataloader = Dataloader(config)
@@ -38,7 +41,7 @@ class HFCycleGAN:
 
         # Loss weights
         self.lambda_cycle = config["train"]["lambda-cycle-loss"] # Cycle-consistency loss
-        self.lambda_adv = 0.1 * self.lambda_cycle 
+        self.lambda_adv = 0.5 * self.lambda_cycle 
         self.lambda_res = 0.01 * self.lambda_cycle   
 
         optimizer = Adam(0.0002, 0.5)
@@ -141,7 +144,9 @@ class HFCycleGAN:
 
                 # Translate images to opposite domain
                 fake_B = self.d_c_stream.predict_on_batch(imgs_A)
-                res_A  = self.d_r_stream.predict_on_batch(imgs_A)
+
+                imgs_A_rand = self.dataloader.load_data_by_domain("A", batch_size)
+                res_A = self.d_r_stream.predict_on_batch(imgs_A_rand)
 
                 fake_A = self.e_c_stream.predict_on_batch([imgs_B, res_A[0], res_A[1], res_A[2]])
 
@@ -173,18 +178,21 @@ class HFCycleGAN:
 
             if (epoch+1) % save_interval == 0:
                 self.sample(epoch+1)
-                # self.disentangler.save(os.path.join(self.save_path, ""))
-                # self.entangler.save(os.path.join(self.save_path, ""))
-
+                self.d_c_stream.save(os.path.join(self.save_path, f"dis_c_stream_{epoch}.h5"))
+                self.d_r_stream.save(os.path.join(self.save_path, f"dis_r_stream_{epoch}.h5"))
+                self.e_c_stream.save(os.path.join(self.save_path, f"ent_c_stream_{epoch}.h5"))
 
     def sample(self, index):
         r, c = 2, 2
+        batch_size = 4
         
-        imgs_A, imgs_B = self.dataloader.load_data(batch_size=1, is_testing=True) 
+        imgs_A, imgs_B = self.dataloader.load_data(batch_size=batch_size, is_testing=False) 
+
+        imgs_A_rand = self.dataloader.load_data_by_domain("A", batch_size=batch_size, is_testing=False)
 
         # Translate images to the other domain
         fake_B = self.d_c_stream.predict_on_batch(imgs_A)
-        res_A  = self.d_r_stream.predict_on_batch(imgs_A)
+        res_A  = self.d_r_stream.predict_on_batch(imgs_A_rand)
 
         fake_A = self.e_c_stream.predict_on_batch([imgs_B, res_A[0], res_A[1], res_A[2]])
 
@@ -195,24 +203,41 @@ class HFCycleGAN:
 
         titles = ['Original', 'Translated']
 
+        count = 0
         plt.switch_backend('agg')
-        fig, axs = plt.subplots(r, c)
-        for i in range(r):
-            for j in range(c):
-                axs[i,j].imshow(gen_imgs[i*c+j])
-                axs[i,j].set_title(titles[j])
-                axs[i,j].axis('off')
-                
-        fig.savefig(os.path.join(self.savepath, f"sample_{index}.png"))
-        plt.close()
+        for batch in range(batch_size):
+            fig, axs = plt.subplots(r, c)
+            for i in range(r):
+                for j in range(c):
+                    axs[i,j].imshow(gen_imgs[count])
+                    # axs[i,j].set_title(titles[j])
+                    axs[i,j].axis('off')
+                    count += 1
+            fig.savefig(os.path.join(self.save_path, f"sample_{index}_{batch}.png"))
+            plt.close()
 
 if __name__ == "__main__":
+
+    config = tf.ConfigProto()
+    # Don't pre-allocate memory; allocate as-needed
+    config.gpu_options.allow_growth = True
+
+    # Only allow a total of half the GPU memory to be allocated
+    config.gpu_options.per_process_gpu_memory_fraction = 0.9
+
+    # Create a session with the above options specified.
+    K.tensorflow_backend.set_session(tf.Session(config=config))
+
     parser = argparse.ArgumentParser(description='HF-CycleGAN Paramaters')
     parser.add_argument('-c', '--config',  type=str, default="config.yaml", help='path of config file')
     args = parser.parse_args()
 
     with open(args.config, 'r') as file:
         config = yaml.load(file, Loader=yaml.Loader)
+
+    save_path = os.path.join(config["paths"]["save"], config["run-title"])
+    if not os.path.exists(save_path): os.makedirs(save_path)
+    copyfile(args.config, os.path.join(save_path, args.config.split("/")[-1]))
 
     gan = HFCycleGAN(config)
     gan.train(epochs=config["train"]["epochs"], batch_size=config["train"]["batch-size"], save_interval=config["train"]["save-interval"])

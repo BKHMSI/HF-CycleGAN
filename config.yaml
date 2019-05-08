@@ -1,8 +1,12 @@
-run-title: "HF-CycleGAN-1"
+run-title: "HF-CycleGAN-9"
 
 paths:
   base: /home/bkhmsi/Documents/Datasets/CycleGAN
-  save: ./output
+  save: output
+
+  load-d-c-stream: ./output/HF-CycleGAN-9/dis_c_stream_335.h5
+  load-d-r-stream: ./output/HF-CycleGAN-9/dis_r_stream_335.h5
+  load-e-c-stream: ./output/HF-CycleGAN-9/ent_c_stream_335.h5
 
 train:
   epochs: 1000
@@ -15,7 +19,7 @@ train:
 
 
 data:
-  dataset: horse2zebra
+  dataset: facades
   imsize: 256
   imchannels: 3
   extension: jpg

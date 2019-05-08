@@ -98,7 +98,7 @@ class Dataloader:
         paths_A = np.array(paths_A)
         paths_B = np.array(paths_B)
 
-        batch_idxs = np.random.choice(len(paths_A), size=batch_size, replace=False)
+        batch_idxs = np.random.choice(min(len(paths_A), len(paths_B)), size=batch_size, replace=False)
         batch_images = zip(paths_A[batch_idxs], paths_B[batch_idxs])
 
         imgs_A, imgs_B = [], []
