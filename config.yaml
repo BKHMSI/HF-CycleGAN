@@ -1,7 +1,7 @@
-run-title: "HF-CycleGAN-9"
+run-title: "HF-CycleGAN-horse2zebra-1"
 
 paths:
-  base: /home/bkhmsi/Documents/Datasets/CycleGAN
+  base: <path-to-dataset-folders>
   save: output
 
   load-d-c-stream: ./output/HF-CycleGAN-9/dis_c_stream_335.h5
@@ -19,7 +19,7 @@ train:
 
 
 data:
-  dataset: facades
+  dataset: horse2zebra
   imsize: 256
   imchannels: 3
   extension: jpg

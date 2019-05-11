@@ -17,7 +17,7 @@ class Models:
         self.ressize = config["train"]["res-size"]
         self.resshape = (self.ressize, self.ressize, config["train"]["res-filters"])
 
-    def build_generator(self, gf=64, network="disentangler", stream="C"):
+    def build_generator(self, domain, gf=64, network="disentangler", stream="C"):
 
         def conv2d(layer_input, filters, f_size=3, linear=False, skip_input=None):
             """Layers used during downsampling"""
@@ -83,9 +83,9 @@ class Models:
         elif stream == "R":
             outputs = [g2, g4, g6]
 
-        return Model(inputs, outputs)
+        return Model(inputs, outputs, name=f"generator-{domain}")
 
-    def build_discriminator(self, df=64):
+    def build_discriminator(self, domain, df=64):
 
         def d_layer(layer_input, filters, f_size=3, normalization=True):
             """Discriminator layer"""
@@ -104,4 +104,4 @@ class Models:
 
         validity = Conv2D(1, kernel_size=4, strides=1, padding='same')(d4)
 
-        return Model(image, validity)
+        return Model(image, validity, name=f"discriminator-{domain}")
